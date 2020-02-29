@@ -2,6 +2,9 @@ package pl.kukla.krzys.msscssm.config;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.statemachine.action.Action;
 import org.springframework.statemachine.config.EnableStateMachineFactory;
 import org.springframework.statemachine.config.StateMachineConfigurerAdapter;
 import org.springframework.statemachine.config.builders.StateMachineConfigurationConfigurer;
@@ -11,8 +14,10 @@ import org.springframework.statemachine.listener.StateMachineListenerAdapter;
 import org.springframework.statemachine.state.State;
 import pl.kukla.krzys.msscssm.domain.PaymentEvent;
 import pl.kukla.krzys.msscssm.domain.PaymentState;
+import pl.kukla.krzys.msscssm.service.PaymentServiceImpl;
 
 import java.util.EnumSet;
+import java.util.Random;
 
 /**
  * @author Krzysztof Kukla
@@ -40,7 +45,7 @@ public class StateMachineConfig extends StateMachineConfigurerAdapter<PaymentSta
         transitions
             //we start with source - NEW state and when we invoke PRE_AUTHORIZE event then we are not changing PaymentState - target - PaymentState
             // will be the same
-            .withExternal().source(PaymentState.NEW).target(PaymentState.NEW).event(PaymentEvent.PRE_AUTHORIZE)
+            .withExternal().source(PaymentState.NEW).target(PaymentState.NEW).event(PaymentEvent.PRE_AUTHORIZE).action(preAuthAction())
             .and()
             //on PRE_AUTH_APPROVED event change status to PRE_AUTH
             .withExternal().source(PaymentState.NEW).target(PaymentState.PRE_AUTH).event(PaymentEvent.PRE_AUTH_APPROVED)
@@ -61,6 +66,27 @@ public class StateMachineConfig extends StateMachineConfigurerAdapter<PaymentSta
         };
 
         config.withConfiguration().listener(stateChangeListener);
+    }
+
+    //additional method which invokes other PaymentEvent and then sendEvent
+    private Action<PaymentState, PaymentEvent> preAuthAction() {
+        return context -> {
+            System.out.println("PreAuth was called!!!");
+            PaymentEvent paymentEvent;
+            if (new Random().nextInt(10) < 8) {
+                System.out.println("Approved");
+                paymentEvent = PaymentEvent.PRE_AUTH_APPROVED;
+            } else {
+                System.out.println("Declined! No credit!!!");
+                paymentEvent = PaymentEvent.PRE_AUTH_DECLINED;
+            }
+            Object messageHeader = context.getMessageHeader(PaymentServiceImpl.PAYMENT_ID_HEADER);
+            Message<PaymentEvent> eventMessage = MessageBuilder.withPayload(paymentEvent)
+                .setHeader(PaymentServiceImpl.PAYMENT_ID_HEADER, messageHeader)
+                .build();
+            context.getStateMachine().sendEvent(eventMessage);
+
+        };
     }
 
 }
