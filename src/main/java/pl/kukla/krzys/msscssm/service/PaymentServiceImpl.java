@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import pl.kukla.krzys.msscssm.domain.Payment;
 import pl.kukla.krzys.msscssm.domain.PaymentEvent;
 import pl.kukla.krzys.msscssm.domain.PaymentState;
+import pl.kukla.krzys.msscssm.interceptor.PaymentStateChangeInterceptor;
 import pl.kukla.krzys.msscssm.repository.PaymentRepository;
 
 /**
@@ -20,8 +21,10 @@ import pl.kukla.krzys.msscssm.repository.PaymentRepository;
 public class PaymentServiceImpl implements PaymentService {
 
     public static final String PAYMENT_ID_HEADER = "payment_id";
+
     private final PaymentRepository paymentRepository;
     private final StateMachineFactory<PaymentState, PaymentEvent> stateMachineFactory;
+    private final PaymentStateChangeInterceptor paymentStateChangeInterceptor;
 
     @Override
     public Payment newPayment(Payment payment) {
@@ -68,6 +71,8 @@ public class PaymentServiceImpl implements PaymentService {
         //and then we are setting stateMachine to specific state of payment retrieved from database
         stateMachine.getStateMachineAccessor()
             .doWithAllRegions(stateMachineAccessor -> {
+                //adding listener/interceptor to state machine for all state changes
+                stateMachineAccessor.addStateMachineInterceptor(paymentStateChangeInterceptor);
                 stateMachineAccessor.resetStateMachine(new DefaultStateMachineContext<>(payment.getPaymentState(), null, null, null));
             });
         stateMachine.start();
