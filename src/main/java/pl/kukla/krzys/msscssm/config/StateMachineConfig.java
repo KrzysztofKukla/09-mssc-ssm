@@ -38,7 +38,8 @@ public class StateMachineConfig extends StateMachineConfigurerAdapter<PaymentSta
     @Override
     public void configure(StateMachineTransitionConfigurer<PaymentState, PaymentEvent> transitions) throws Exception {
         transitions
-            //we start with NEW state and when we invoke PRE_AUTHORIZE event then we are not changing PaymentState - PaymentState will be the same
+            //we start with source - NEW state and when we invoke PRE_AUTHORIZE event then we are not changing PaymentState - target - PaymentState
+            // will be the same
             .withExternal().source(PaymentState.NEW).target(PaymentState.NEW).event(PaymentEvent.PRE_AUTHORIZE)
             .and()
             //on PRE_AUTH_APPROVED event change status to PRE_AUTH
