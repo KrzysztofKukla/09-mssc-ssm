@@ -4,12 +4,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.statemachine.StateContext;
 import org.springframework.statemachine.action.Action;
 import org.springframework.statemachine.config.EnableStateMachineFactory;
 import org.springframework.statemachine.config.StateMachineConfigurerAdapter;
 import org.springframework.statemachine.config.builders.StateMachineConfigurationConfigurer;
 import org.springframework.statemachine.config.builders.StateMachineStateConfigurer;
 import org.springframework.statemachine.config.builders.StateMachineTransitionConfigurer;
+import org.springframework.statemachine.guard.Guard;
 import org.springframework.statemachine.listener.StateMachineListenerAdapter;
 import org.springframework.statemachine.state.State;
 import pl.kukla.krzys.msscssm.domain.PaymentEvent;
@@ -45,15 +47,16 @@ public class StateMachineConfig extends StateMachineConfigurerAdapter<PaymentSta
         transitions
             //we start with source - NEW state and when we invoke PRE_AUTHORIZE event then we are not changing PaymentState - target - PaymentState
             // will be the same
-            .withExternal().source(PaymentState.NEW).target(PaymentState.NEW).event(PaymentEvent.PRE_AUTHORIZE).action(preAuthAction())
-            .and()
+            .withExternal().source(PaymentState.NEW).target(PaymentState.NEW).event(PaymentEvent.PRE_AUTHORIZE).action(preAuthAction()).guard(paymentIdGuard())
             //on PRE_AUTH_APPROVED event change status to PRE_AUTH
-            .withExternal().source(PaymentState.NEW).target(PaymentState.PRE_AUTH).event(PaymentEvent.PRE_AUTH_APPROVED)
-            .and()
-            .withExternal().source(PaymentState.NEW).target(PaymentState.PRE_AUTH_ERROR).event(PaymentEvent.PRE_AUTH_DECLINED);
-        //if we will specify any transition PaymentState then PaymentState will stay the same
+            .and().withExternal().source(PaymentState.NEW).target(PaymentState.PRE_AUTH).event(PaymentEvent.PRE_AUTH_APPROVED)
+            .and().withExternal().source(PaymentState.NEW).target(PaymentState.PRE_AUTH_ERROR).event(PaymentEvent.PRE_AUTH_DECLINED)
+            .and().withExternal().source(PaymentState.PRE_AUTH).target(PaymentState.PRE_AUTH).event(PaymentEvent.AUTHORIZE).action(authorizeAction())
+            .and().withExternal().source(PaymentState.PRE_AUTH).target(PaymentState.AUTH).event(PaymentEvent.AUTH_APPROVED)
+            .and().withExternal().source(PaymentState.PRE_AUTH).target(PaymentState.AUTH_ERROR).event(PaymentEvent.AUTH_DECLINED);
 
     }
+
 
     //listener for status change
     @Override
@@ -68,25 +71,50 @@ public class StateMachineConfig extends StateMachineConfigurerAdapter<PaymentSta
         config.withConfiguration().listener(stateChangeListener);
     }
 
+    private Guard<PaymentState, PaymentEvent> paymentIdGuard() {
+        return context -> {
+            // if our stateMachine is missing PAYMENT_ID_HEADER then will not proceed
+            return context.getMessageHeader(PaymentServiceImpl.PAYMENT_ID_HEADER) != null;
+        };
+    }
+
     //additional method which invokes other PaymentEvent and then sendEvent
     private Action<PaymentState, PaymentEvent> preAuthAction() {
         return context -> {
             System.out.println("PreAuth was called!!!");
             PaymentEvent paymentEvent;
-            if (new Random().nextInt(10) < 8) {
+            if (randomValue()) {
                 System.out.println("Approved");
                 paymentEvent = PaymentEvent.PRE_AUTH_APPROVED;
             } else {
                 System.out.println("Declined! No credit!!!");
                 paymentEvent = PaymentEvent.PRE_AUTH_DECLINED;
             }
-            Object messageHeader = context.getMessageHeader(PaymentServiceImpl.PAYMENT_ID_HEADER);
-            Message<PaymentEvent> eventMessage = MessageBuilder.withPayload(paymentEvent)
-                .setHeader(PaymentServiceImpl.PAYMENT_ID_HEADER, messageHeader)
-                .build();
-            context.getStateMachine().sendEvent(eventMessage);
+            buildAndSendMessage(context, paymentEvent);
 
         };
+    }
+
+    private Action<PaymentState, PaymentEvent> authorizeAction() {
+        return context -> {
+            PaymentEvent paymentEvent = randomValue() ?
+                PaymentEvent.AUTH_APPROVED : PaymentEvent.AUTH_DECLINED;
+
+            buildAndSendMessage(context, paymentEvent);
+        };
+
+    }
+
+    private boolean randomValue() {
+        return new Random().nextInt(10) < 8;
+    }
+
+    private void buildAndSendMessage(StateContext<PaymentState, PaymentEvent> context, PaymentEvent paymentEvent) {
+        Object messageHeader = context.getMessageHeader(PaymentServiceImpl.PAYMENT_ID_HEADER);
+        Message<PaymentEvent> eventMessage = MessageBuilder.withPayload(paymentEvent)
+            .setHeader(PaymentServiceImpl.PAYMENT_ID_HEADER, messageHeader)
+            .build();
+        context.getStateMachine().sendEvent(eventMessage);
     }
 
 }

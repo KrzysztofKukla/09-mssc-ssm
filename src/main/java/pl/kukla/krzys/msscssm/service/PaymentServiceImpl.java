@@ -45,10 +45,11 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public StateMachine<PaymentState, PaymentEvent> authorizePayment(Long paymentId) {
         StateMachine<PaymentState, PaymentEvent> stateMachine = buildStateMachine(paymentId);
-        sendEventMessage(paymentId, stateMachine, PaymentEvent.AUTH_APPROVED);
+        sendEventMessage(paymentId, stateMachine, PaymentEvent.AUTHORIZE);
         return stateMachine;
     }
 
+    @Deprecated // not needed
     @Transactional
     @Override
     public StateMachine<PaymentState, PaymentEvent> declineAuth(Long paymentId) {
@@ -77,7 +78,8 @@ public class PaymentServiceImpl implements PaymentService {
             .doWithAllRegions(stateMachineAccessor -> {
                 //adding listener/interceptor to state machine for all state changes
                 stateMachineAccessor.addStateMachineInterceptor(paymentStateChangeInterceptor);
-                stateMachineAccessor.resetStateMachine(new DefaultStateMachineContext<>(payment.getPaymentState(), null, null, null));
+                stateMachineAccessor.resetStateMachine(new DefaultStateMachineContext<>(payment.getPaymentState(), null, null,
+                    null));
             });
         stateMachine.start();
         return stateMachine;
