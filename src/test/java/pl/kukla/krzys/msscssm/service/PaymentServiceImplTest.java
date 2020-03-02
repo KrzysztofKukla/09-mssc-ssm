@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import pl.kukla.krzys.msscssm.domain.Payment;
 import pl.kukla.krzys.msscssm.domain.PaymentEvent;
 import pl.kukla.krzys.msscssm.domain.PaymentState;
-import pl.kukla.krzys.msscssm.repository.PaymentRepository;
 
 import java.math.BigDecimal;
 
@@ -30,9 +29,6 @@ class PaymentServiceImplTest {
     @Autowired
     PaymentService paymentService;
 
-    @Autowired
-    PaymentRepository paymentRepository;
-
     Payment payment;
 
     @BeforeEach
@@ -40,7 +36,6 @@ class PaymentServiceImplTest {
         payment = Payment.builder()
             .amount(new BigDecimal("12.99"))
             .build();
-
     }
 
     @Transactional
@@ -53,11 +48,6 @@ class PaymentServiceImplTest {
         StateMachine<PaymentState, PaymentEvent> stateMachine = paymentService.preAuth(paymentId);
         PaymentState currentState = stateMachine.getState().getId();
         org.assertj.core.api.Assertions.assertThat(currentState).isIn(PRE_AUTH, PRE_AUTH_ERROR);
-//            Assertions.assertEquals(PRE_AUTH, stateMachine.getState().getId());
-//
-//        Payment preAuthPayment = paymentRepository.getOne(paymentId);
-//        Assertions.assertEquals(PRE_AUTH, preAuthPayment.getPaymentState());
-
     }
 
     @Transactional
